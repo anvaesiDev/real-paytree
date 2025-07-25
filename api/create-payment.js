@@ -1,13 +1,10 @@
-// /api/create-payment.js для Paytree/Payforest
+// /api/create-payment.js для Paytree/Payforest (с другим заголовком)
 
 export default async function handler(request, response) {
   // Настройка CORS
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-API-Key"); // Добавлен X-API-Key
 
   if (request.method === "OPTIONS") {
     return response.status(200).end();
@@ -19,19 +16,16 @@ export default async function handler(request, response) {
 
   try {
     const { amount, currency, description } = request.body;
-    const PAYTREE_API_KEY = process.env.PAYTREE_API_KEY; // Ключ из Vercel
+    const PAYTREE_API_KEY = process.env.PAYTREE_API_KEY;
 
     if (!PAYTREE_API_KEY) {
       throw new Error("API ключ Paytree не настроен на сервере.");
     }
 
-    // --- Получаем IP и User Agent из заголовков запроса ---
     const ip =
       request.headers["x-forwarded-for"] || request.socket.remoteAddress;
     const userAgent = request.headers["user-agent"];
-    // ---------------------------------------------------
 
-    // Формируем тело запроса согласно документации Paytree
     const bodyForApi = {
       amount: amount,
       currency: currency,
@@ -52,7 +46,9 @@ export default async function handler(request, response) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${PAYTREE_API_KEY}`, // Аутентификация
+        // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+        // 'Authorization': `Bearer ${PAYTREE_API_KEY}`, // Старый вариант
+        "X-API-Key": PAYTREE_API_KEY, // Новый вариант
       },
       body: JSON.stringify(bodyForApi),
     });
@@ -64,7 +60,9 @@ export default async function handler(request, response) {
         JSON.stringify(paytreeData, null, 2)
       );
       throw new Error(
-        paytreeData.detail || "Ошибка от платежной системы Paytree"
+        paytreeData.message ||
+          paytreeData.detail ||
+          "Ошибка от платежной системы Paytree"
       );
     }
 
