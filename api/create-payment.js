@@ -1,4 +1,4 @@
-// /api/create-payment.js для Paytree/Payforest (ФИНАЛЬНАЯ ВЕРСИЯ)
+// /api/create-payment.js для Paytree/Payforest (убрано поле description)
 
 export default async function handler(request, response) {
   // Настройка CORS
@@ -14,7 +14,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    const { amount, currency, description, customer, address } = request.body;
+    const { amount, currency, customer, address } = request.body; // Убрали description отсюда
     const PAYTREE_API_KEY = process.env.PAYTREE_API_KEY;
 
     if (!PAYTREE_API_KEY) {
@@ -25,23 +25,22 @@ export default async function handler(request, response) {
       request.headers["x-forwarded-for"] || request.socket.remoteAddress;
     const userAgent = request.headers["user-agent"];
 
-    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Формируем тело запроса согласно ошибке ---
+    // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Убираем поле description из тела запроса ---
     const bodyForApi = {
       transaction_ref: `order_${Date.now()}`,
       client_ref: `user_${Date.now()}`,
       amount_currency: {
-        // API ожидает объект amount_currency
         amount: amount,
         currency: currency,
       },
-      customer: customer, // Передаем объект customer с фронтенда
-      address: address, // Передаем объект address с фронтенда
+      // description: description, // <-- УБИРАЕМ ЭТО ПОЛЕ
+      customer: customer,
+      address: address,
       session: {
-        // Формируем объект session на бэкенде
         ip: ip,
         user_agent: userAgent,
       },
-      callback: `https://your-site.com/callback?id={payment_intent_id}`, // URL для вебхуков
+      callback: `https://your-site.com/callback?id={payment_intent_id}`,
     };
     // --------------------------------------------------------------------
 
@@ -52,7 +51,7 @@ export default async function handler(request, response) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Token ${PAYTREE_API_KEY}`, // Используем 'Token'
+        Authorization: `Token ${PAYTREE_API_KEY}`,
       },
       body: JSON.stringify(bodyForApi),
     });
