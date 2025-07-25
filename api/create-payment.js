@@ -1,4 +1,4 @@
-// /api/create-payment.js --- ОТЛАДОЧНАЯ ВЕРСИЯ ---
+// /api/create-payment.js для Paytree/Payforest (ФИНАЛЬНАЯ ВЕРСИЯ)
 
 export default async function handler(request, response) {
   // Настройка CORS
@@ -14,12 +14,37 @@ export default async function handler(request, response) {
   }
 
   try {
+    const { amount, currency, description, customer, address } = request.body;
     const PAYTREE_API_KEY = process.env.PAYTREE_API_KEY;
+
     if (!PAYTREE_API_KEY) {
       throw new Error("API ключ Paytree не настроен на сервере.");
     }
 
-    const bodyForApi = request.body; // Просто пересылаем то, что пришло с фронта
+    const ip =
+      request.headers["x-forwarded-for"] || request.socket.remoteAddress;
+    const userAgent = request.headers["user-agent"];
+
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Формируем тело запроса согласно ошибке ---
+    const bodyForApi = {
+      transaction_ref: `order_${Date.now()}`,
+      client_ref: `user_${Date.now()}`,
+      amount_currency: {
+        // API ожидает объект amount_currency
+        amount: amount,
+        currency: currency,
+      },
+      customer: customer, // Передаем объект customer с фронтенда
+      address: address, // Передаем объект address с фронтенда
+      session: {
+        // Формируем объект session на бэкенде
+        ip: ip,
+        user_agent: userAgent,
+      },
+      callback: `https://your-site.com/callback?id={payment_intent_id}`, // URL для вебхуков
+    };
+    // --------------------------------------------------------------------
+
     const PAYTREE_API_URL =
       "https://api.payforest.xyz/v1/transaction/payment_intent/";
 
@@ -27,36 +52,32 @@ export default async function handler(request, response) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Token ${PAYTREE_API_KEY}`,
+        Authorization: `Token ${PAYTREE_API_KEY}`, // Используем 'Token'
       },
       body: JSON.stringify(bodyForApi),
     });
 
-    // --- НОВЫЙ КОД ДЛЯ ОТЛАДКИ ---
-    // Получаем ответ от сервера как сырой текст, чтобы ничего не упустить
-    const rawResponseText = await paytreeResponse.text();
-
-    // Выводим в логи Vercel абсолютно всё, что получили
-    console.log("--- RAW RESPONSE FROM PAYTREE API ---");
-    console.log("Status:", paytreeResponse.status, paytreeResponse.statusText);
-    console.log("Headers:", paytreeResponse.headers);
-    console.log("Response Body (Raw Text):", rawResponseText);
-    console.log("------------------------------------");
-
-    // Пытаемся обработать ответ
+    const paytreeData = await paytreeResponse.json();
     if (!paytreeResponse.ok) {
-      // Отправляем на фронтенд сырой текст ошибки, чтобы увидеть его в браузере
+      console.error(
+        "Ошибка от API Paytree:",
+        JSON.stringify(paytreeData, null, 2)
+      );
       throw new Error(
-        `API Error ${paytreeResponse.status}: ${rawResponseText}`
+        paytreeData.message ||
+          paytreeData.detail ||
+          "Ошибка от платежной системы Paytree"
       );
     }
 
-    const paytreeData = JSON.parse(rawResponseText); // Парсим текст вручную
     const paymentLink = paytreeData.payment_link;
+    if (!paymentLink) {
+      throw new Error("Не удалось получить payment_link от Paytree");
+    }
 
     return response.status(200).json({ payment_link: paymentLink });
   } catch (error) {
-    console.error("[BACKEND_ERROR]", error.message);
+    console.error("[PAYTREE_ERROR]", error.message);
     return response.status(500).json({ message: error.message });
   }
 }
