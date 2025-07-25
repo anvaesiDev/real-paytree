@@ -1,10 +1,13 @@
-// /api/create-payment.js для Paytree/Payforest (с другим заголовком)
+// /api/create-payment.js для Paytree/Payforest (с Basic Auth)
 
 export default async function handler(request, response) {
   // Настройка CORS
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-API-Key"); // Добавлен X-API-Key
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
 
   if (request.method === "OPTIONS") {
     return response.status(200).end();
@@ -16,11 +19,13 @@ export default async function handler(request, response) {
 
   try {
     const { amount, currency, description } = request.body;
-    const PAYTREE_API_KEY = process.env.PAYTREE_API_KEY;
 
-    if (!PAYTREE_API_KEY) {
-      throw new Error("API ключ Paytree не настроен на сервере.");
-    }
+    // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Используем Basic Auth с вашими логином и паролем ---
+    const username = "uniq";
+    const password = "QcuL6D4Iz3E5Ir";
+    // Кодируем 'логин:пароль' в формат Base64
+    const basicAuth = Buffer.from(`${username}:${password}`).toString("base64");
+    // ----------------------------------------------------------------------
 
     const ip =
       request.headers["x-forwarded-for"] || request.socket.remoteAddress;
@@ -46,9 +51,8 @@ export default async function handler(request, response) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-        // 'Authorization': `Bearer ${PAYTREE_API_KEY}`, // Старый вариант
-        "X-API-Key": PAYTREE_API_KEY, // Новый вариант
+        // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Отправляем новый заголовок ---
+        Authorization: `Basic ${basicAuth}`,
       },
       body: JSON.stringify(bodyForApi),
     });
