@@ -1,4 +1,4 @@
-// /api/create-payment.js для Paytree/Payforest (убрано поле description)
+// /api/create-payment.js для Paytree/Payforest (новая попытка с Basic Auth + API Key)
 
 export default async function handler(request, response) {
   // Настройка CORS
@@ -14,18 +14,21 @@ export default async function handler(request, response) {
   }
 
   try {
-    const { amount, currency, customer, address } = request.body; // Убрали description отсюда
+    const { amount, currency, description, customer, address } = request.body;
     const PAYTREE_API_KEY = process.env.PAYTREE_API_KEY;
 
     if (!PAYTREE_API_KEY) {
       throw new Error("API ключ Paytree не настроен на сервере.");
     }
 
+    // --- НОВАЯ ТЕОРИЯ: API-ключ как логин для Basic Auth, пароль пустой ---
+    const basicAuth = Buffer.from(`${PAYTREE_API_KEY}:`).toString("base64");
+    // --------------------------------------------------------------------
+
     const ip =
       request.headers["x-forwarded-for"] || request.socket.remoteAddress;
     const userAgent = request.headers["user-agent"];
 
-    // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Убираем поле description из тела запроса ---
     const bodyForApi = {
       transaction_ref: `order_${Date.now()}`,
       client_ref: `user_${Date.now()}`,
@@ -33,7 +36,6 @@ export default async function handler(request, response) {
         amount: amount,
         currency: currency,
       },
-      // description: description, // <-- УБИРАЕМ ЭТО ПОЛЕ
       customer: customer,
       address: address,
       session: {
@@ -42,7 +44,6 @@ export default async function handler(request, response) {
       },
       callback: `https://your-site.com/callback?id={payment_intent_id}`,
     };
-    // --------------------------------------------------------------------
 
     const PAYTREE_API_URL =
       "https://api.payforest.xyz/v1/transaction/payment_intent/";
@@ -51,7 +52,8 @@ export default async function handler(request, response) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Token ${PAYTREE_API_KEY}`,
+        // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+        Authorization: `Basic ${basicAuth}`,
       },
       body: JSON.stringify(bodyForApi),
     });
