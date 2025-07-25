@@ -1,4 +1,4 @@
-// /api/create-payment.js для Paytree/Payforest (новая попытка с Basic Auth + API Key)
+// /api/create-payment.js для Paytree/Payforest (финальная попытка с Authorization: Token)
 
 export default async function handler(request, response) {
   // Настройка CORS
@@ -20,10 +20,6 @@ export default async function handler(request, response) {
     if (!PAYTREE_API_KEY) {
       throw new Error("API ключ Paytree не настроен на сервере.");
     }
-
-    // --- НОВАЯ ТЕОРИЯ: API-ключ как логин для Basic Auth, пароль пустой ---
-    const basicAuth = Buffer.from(`${PAYTREE_API_KEY}:`).toString("base64");
-    // --------------------------------------------------------------------
 
     const ip =
       request.headers["x-forwarded-for"] || request.socket.remoteAddress;
@@ -52,25 +48,26 @@ export default async function handler(request, response) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-        Authorization: `Basic ${basicAuth}`,
+        // --- ВОЗВРАЩАЕМСЯ К ЭТОМУ ВАРИАНТУ С ПРОВЕРЕННЫМ КЛЮЧОМ ---
+        Authorization: `Token ${PAYTREE_API_KEY}`,
       },
       body: JSON.stringify(bodyForApi),
     });
 
-    const paytreeData = await paytreeResponse.json();
+    // Улучшенное логирование, чтобы видеть точный ответ сервера
+    const rawResponseText = await paytreeResponse.text();
+    console.log("--- RAW RESPONSE FROM PAYTREE API ---");
+    console.log("Status:", paytreeResponse.status);
+    console.log("Response Body:", rawResponseText);
+    console.log("------------------------------------");
+
     if (!paytreeResponse.ok) {
-      console.error(
-        "Ошибка от API Paytree:",
-        JSON.stringify(paytreeData, null, 2)
-      );
       throw new Error(
-        paytreeData.message ||
-          paytreeData.detail ||
-          "Ошибка от платежной системы Paytree"
+        `API Error ${paytreeResponse.status}: ${rawResponseText}`
       );
     }
 
+    const paytreeData = JSON.parse(rawResponseText);
     const paymentLink = paytreeData.payment_link;
     if (!paymentLink) {
       throw new Error("Не удалось получить payment_link от Paytree");
